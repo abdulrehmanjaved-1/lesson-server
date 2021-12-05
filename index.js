@@ -55,7 +55,7 @@ io.on("connection", (socket) => {
 
         socket.join(data.room);
         console.log(`${socket.id} connected to room ${data.room}`);
-        socket.to(data.room).emit('peer-connected');
+        socket.to(data.room).emit('peer-connected', data);
         socket.on('disconnect', () => {
             console.log(`${socket.id} disconnected socket.is_teacher ${socket.is_teacher}`);
             socket.to(data.room).emit('peer-disconnected');
@@ -66,6 +66,15 @@ io.on("connection", (socket) => {
 	    }
         });
     });
+
+    socket.on('update_name', (data) => {
+        if (!data.room) {
+            return;
+        }
+        console.log(`${socket.id} emitting offer`);
+        socket.to(data.room).emit('update_name', data);
+    });
+
 
     socket.on('offer', (data) => {
         if (!data.room) {
@@ -219,7 +228,7 @@ console.dir(userResult);
 
   console.log("------------------------------");
   console.log("testURL = " + testURL);
-  return testURL;
+  return testURL + '&cb=0';
 	} catch(e) {
 		console.log('exception in fetchWhiteboardUrl ' + e);
 	}
