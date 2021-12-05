@@ -228,7 +228,7 @@ console.dir(userResult);
 
   console.log("------------------------------");
   console.log("testURL = " + testURL);
-  return testURL + '&cb=0';
+  return testURL + '&cb=0&mnpn=0&mnxp=0';
 	} catch(e) {
 		console.log('exception in fetchWhiteboardUrl ' + e);
 	}
