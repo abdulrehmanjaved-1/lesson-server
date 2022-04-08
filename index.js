@@ -149,6 +149,14 @@ io.on("connection", (socket) => {
         console.log(`${socket.id} emitting chat message`);
         socket.to(data.room).emit('chat', data);
     });
+    socket.on('read', (data) => {
+        if (!data.room) {
+            return;
+        }
+        console.log(`${socket.id} emitting chat message`);
+        socket.to(data.room).emit('read', data);
+    });
+
 });
 
 httpServer.listen(config_1.PORT, () => console.log(`Server listening on port ${config_1.PORT}`));
