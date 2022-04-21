@@ -1,18 +1,129 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
-const http_1 = require("http");
 const socket_io_1 = require("socket.io");
-const httpServer = http_1.createServer();
-const https = require("https");
 const readline = require('readline');
+
+var app = require('../app');
+var debug = require('debug')('nodeserver:server');
+var https = require('https');
+var http = require('http');
+var fs = require('fs');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '443');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var options = {
+        ca: fs.readFileSync('ssl_keys/ca.bundle'),
+        key: fs.readFileSync('ssl_keys/server.key'),
+        cert: fs.readFileSync('ssl_keys/server.crt')
+};
+
+var http_server = http.createServer(app);
+var https_server = https.createServer(options, app);
+
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+http_server.listen(80);
+https_server.listen(443);
+
+http_server.on('error', onError);
+http_server.on('listening', onListening);
+
+https_server.on('error', onError);
+https_server.on('listening', onSecureListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = http_server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
+
+function onSecureListening() {
+  var addr = https_server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
 
 const _host = "api.apix.limnu.com";  // The limnu base address
 const _port = "443";            // SSL
 const _basePath = "/v1/";       // The API version number
 const _apiKey = "K_xG3LYQcXQzyJTieL05YYEwLdqg59um";  // Replace this with your API key
 
-const io = new socket_io_1.Server(httpServer, {
+const io = new socket_io_1.Server(https_server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"],
@@ -28,30 +139,30 @@ io.on("connection", (socket) => {
     console.log(`${socket.id} connected`);
 
     socket.on('fetch-rooms', (data) => {
-	socket.emit('fetch-rooms', roomsObj);		    	
-	socket.on('disconnect', () => {
-		console.log(`${socket.id} fetch rooms disconnected`);
-	});
+        socket.emit('fetch-rooms', roomsObj);
+        socket.on('disconnect', () => {
+                console.log(`${socket.id} fetch rooms disconnected`);
+        });
     });
 
     socket.on('join-room', (data) => {
-	console.log('got join room method');
+        console.log('got join room method');
         if (!data.room) {
-	    console.log("No Room");
-	    socket.emit('room-not-found');		    
+            console.log("No Room");
+            socket.emit('room-not-found');
             return;
         }
         const connectedSockets = io.of("/").adapter.rooms.get(data.room);
         if (connectedSockets && connectedSockets.size > 1) {
-	    socket.emit('room-full');		    	
-	    console.log("Room is full");
+            socket.emit('room-full');
+            console.log("Room is full");
             return;
         }
 
-	if(!roomsObj[data.room]) {
-		roomsObj[data.room] = data;
-		socket.is_teacher = data.is_teacher;
-	}
+        if(!roomsObj[data.room]) {
+                roomsObj[data.room] = data;
+                socket.is_teacher = data.is_teacher;
+        }
 
         socket.join(data.room);
         console.log(`${socket.id} connected to room ${data.room}`);
@@ -59,11 +170,11 @@ io.on("connection", (socket) => {
         socket.on('disconnect', () => {
             console.log(`${socket.id} disconnected socket.is_teacher ${socket.is_teacher}`);
             socket.to(data.room).emit('peer-disconnected');
-	    if(socket.is_teacher) {
-		if(roomsObj[data.room]) {
-			delete roomsObj[data.room];
-		}
-	    }
+            if(socket.is_teacher) {
+                if(roomsObj[data.room]) {
+                        delete roomsObj[data.room];
+                }
+            }
         });
     });
 
@@ -97,7 +208,7 @@ io.on("connection", (socket) => {
             return;
         }
         console.log(`${socket.id} emitting ice-candidate`);
-        socket.to(data.room).emit('candidate', data);  
+        socket.to(data.room).emit('candidate', data);
     });
 
     socket.on('start-whiteboard', async (data) => {
@@ -106,24 +217,24 @@ io.on("connection", (socket) => {
         }
         if(!data.url) { // If we already have url don't create again
             let url = await fetchWhiteboardUrl(data);
-	    if(!url) {
-		socket.emit('start-whiteboard-failed', data); 
-		return;
-	    }
+            if(!url) {
+                socket.emit('start-whiteboard-failed', data);
+                return;
+            }
             data.url = url;
             // Make sure update to self as well
-            socket.emit('start-whiteboard', data);  // Sending to Self 
+            socket.emit('start-whiteboard', data);  // Sending to Self
         }
         console.log(`${socket.id} emitting start whiteboard`);
-        socket.to(data.room).emit('start-whiteboard', data);  
+        socket.to(data.room).emit('start-whiteboard', data);
     });
-    
+
     socket.on('stop-whiteboard', (data) => {
         if (!data.room) {
             return;
         }
         console.log(`${socket.id} emitting stop whiteboard`);
-        socket.to(data.room).emit('stop-whiteboard', data);  
+        socket.to(data.room).emit('stop-whiteboard', data);
     });
 
     socket.on('mute-audio', (data) => {
@@ -131,7 +242,7 @@ io.on("connection", (socket) => {
             return;
         }
         console.log(`${socket.id} emitting mute-audio`);
-        socket.to(data.room).emit('mute-audio', data);  
+        socket.to(data.room).emit('mute-audio', data);
     });
 
      socket.on('block-video', (data) => {
@@ -139,7 +250,7 @@ io.on("connection", (socket) => {
             return;
         }
         console.log(`${socket.id} emitting mute-audio`);
-        socket.to(data.room).emit('block-video', data);  
+        socket.to(data.room).emit('block-video', data);
     });
 
     socket.on('chat', (data) => {
@@ -158,8 +269,6 @@ io.on("connection", (socket) => {
     });
 
 });
-
-httpServer.listen(config_1.PORT, () => console.log(`Server listening on port ${config_1.PORT}`));
 
 async function postData(path, requestData)
 {
@@ -208,7 +317,7 @@ async function postData(path, requestData)
 
 async function fetchWhiteboardUrl(data)
 {
-	try {
+        try {
   console.log("fetchWhiteboardUrl");
 
   if(!data.name) {
@@ -221,13 +330,13 @@ async function fetchWhiteboardUrl(data)
   let boardResult = await postData("boardCreate", {"boardName": data.name + " Board", "whiteLabel": true});
 
  console.log('after boardResult ' + new Date());
-	
+
 console.dir(boardResult);
 
   // Createa a new user
   let userResult = await postData("userCreate", {"displayName": data.name, "whitelabel": true});
 
-   console.log('after userResult ' + new Date());	
+   console.log('after userResult ' + new Date());
 
 console.dir(userResult);
 
@@ -237,9 +346,9 @@ console.dir(userResult);
   console.log("------------------------------");
   console.log("testURL = " + testURL);
   return testURL + '&cb=0&mnpn=0&mnxp=0';
-	} catch(e) {
-		console.log('exception in fetchWhiteboardUrl ' + e);
-	}
+        } catch(e) {
+                console.log('exception in fetchWhiteboardUrl ' + e);
+        }
 
-	return null;
+        return null;
 }
